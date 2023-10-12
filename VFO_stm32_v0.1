@@ -1,0 +1,128 @@
+#include "SPI.h"
+//#include "Adafruit_GFX.h"
+#include "Adafruit_ILI9341.h"
+
+#define TFT_CS    PA4
+#define TFT_CLK   PA5
+#define TFT_MISO  PA6
+#define TFT_MOSI  PA7
+#define TFT_RST   PB0
+#define TFT_DC    PB1
+#define AUDIO_IN  PA0
+
+#define SCALE_X_OFFSET 20
+#define SCALE_Y_OFFSET 60
+#define SCALE_WIDTH 200
+#define SCALE_HEIGHT 20
+#define NUM_SEGMENTS 9
+
+Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
+
+bool statechange = 1;   // Variable de cambio de estado
+long clock_state = 7000000; // Valor del reloj
+bool change; // Variable de cambio
+
+int previousAudioValue = 0; // Valor de audio anterior
+unsigned long lastScreenUpdate = 0; // Última actualización de pantalla
+int screenRefreshRate = 500; // Tasa de actualización de pantalla
+
+void setup() {
+  tft.begin(); // Inicializa la pantalla
+  tft.setRotation(1); // Establece la orientación de la pantalla
+  tft.fillScreen(ILI9341_BLACK); // Rellena la pantalla de azul
+  tft.setTextColor(ILI9341_WHITE); // Establece el color de texto a blanco
+  tft.setTextSize(1); // Establece el tamaño del texto
+  pinMode(PB12, INPUT_PULLUP); // Configura el pin PB12 como entrada con resistencia pull-up
+  pinMode(PB13, INPUT_PULLUP); // Configura el pin PB13 como entrada con resistencia pull-up
+  attachInterrupt(digitalPinToInterrupt(PB12), clock1_ISR, FALLING); // Asocia la interrupción a PB12
+  attachInterrupt(digitalPinToInterrupt(PB13), clock1_ISR2, FALLING); // Asocia la interrupción a PB13
+ // SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0)); // Configura la comunicación SPI
+
+  drawScale(); // Dibuja la escala en la pantalla
+}
+
+void clock1_ISR() {
+  bool dir = digitalRead(PB13);
+  if (dir == true) {
+    clock_state++;
+  }
+  if (dir == false) {
+    clock_state--;
+  }
+  change = true; // Indica que el estado ha cambiado
+}
+
+void clock1_ISR2() {
+  bool dir = digitalRead(PB12);
+  if (dir == true) {
+    clock_state--;
+  }
+  if (dir == false) {
+    clock_state++;
+  }
+  change = true; // Indica que el estado ha cambiado
+}
+
+void drawScale() {
+  // Dibuja el marco de la escala S con marcas
+  int segmentWidth = SCALE_WIDTH / NUM_SEGMENTS; // Ancho de cada segmento
+  int scaleValue = 0; // Valor inicial de la escala
+
+  // Dibuja el marco de la escala
+  tft.drawRect(SCALE_X_OFFSET, SCALE_Y_OFFSET, SCALE_WIDTH, SCALE_HEIGHT, ILI9341_WHITE);
+
+  for (int i = 0; i <= NUM_SEGMENTS; i++) {
+    int x = SCALE_X_OFFSET + i * segmentWidth;
+    // Dibuja las marcas verticales
+    tft.drawFastVLine(x, SCALE_Y_OFFSET - 5, SCALE_HEIGHT + 10, ILI9341_WHITE);
+    // Etiqueta los valores S en las marcas
+    tft.setCursor(x - 10, SCALE_Y_OFFSET + SCALE_HEIGHT + 5); // Ajusta la posición del texto
+    tft.setTextSize(1); // Restablece el tamaño del texto a 1
+    tft.setTextColor(ILI9341_WHITE);
+    tft.print("S" + String(scaleValue)); // Muestra "S" seguido del valor de la escala
+    scaleValue += 9 / NUM_SEGMENTS; // Aumenta el valor de la escala
+  }
+}
+
+void loop() {
+  unsigned long currentMillis = millis(); // Obtiene el tiempo actual en milisegundos
+
+  if (change == true) {
+    clock_update();
+  }
+
+  if (currentMillis - lastScreenUpdate >= screenRefreshRate) {
+    audio_peek();
+    lastScreenUpdate = currentMillis;
+  }
+}
+
+void audio_peek() {
+  int audioValue = analogRead(AUDIO_IN); // Lee el valor de audio
+  int segmentWidth = SCALE_WIDTH / NUM_SEGMENTS; // Ancho de cada segmento
+  int segment = audioValue / (4095 / NUM_SEGMENTS); // Calcula el segmento
+  int barX = SCALE_X_OFFSET + segment * segmentWidth; // Posición de la barra
+
+  if (audioValue != previousAudioValue) {
+    // Borra el área de la barra anterior solo si el valor cambió
+    tft.fillRect(SCALE_X_OFFSET, SCALE_Y_OFFSET, SCALE_WIDTH, SCALE_HEIGHT, ILI9341_BLACK);
+
+    // Dibuja la barra segmentada en la posición deseada
+    for (int i = 0; i <= segment; i++) {
+      int x = SCALE_X_OFFSET + i * segmentWidth;
+      tft.fillRect(x, SCALE_Y_OFFSET, segmentWidth, SCALE_HEIGHT, ILI9341_GREEN);
+    }
+
+    previousAudioValue = audioValue; // Actualiza el valor anterior
+  }
+}
+
+void clock_update() {
+  tft.fillRect(20, 30, 170, 28, ILI9341_BLACK);
+  tft.setCursor(20, 30);
+  tft.setTextColor(ILI9341_GREEN);
+  tft.setTextSize(4);
+  tft.print(clock_state);
+  change = 0;
+}
+
