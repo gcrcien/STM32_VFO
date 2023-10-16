@@ -1,5 +1,4 @@
 #include "SPI.h"
-//#include "Adafruit_GFX.h"
 #include "Adafruit_ILI9341.h"
 #include "Wire.h"
 #include "I2CKeyPad.h"
@@ -13,30 +12,26 @@
 #define AUDIO_IN  PA0
 
 #define SCALE_X_OFFSET 20
-#define AUDIO_BAR_Y_OFFSET 70 // Ajusta la posición vertical de la barra de audio
+#define AUDIO_BAR_Y_OFFSET 70
 #define SCALE_WIDTH 200
 #define SCALE_HEIGHT 20
-#define NUM_SEGMENTS 8
+#define NUM_SEGMENTS 9
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 
 const uint8_t KEYPAD_ADDRESS = 0x20;
-
 I2CKeyPad keyPad(KEYPAD_ADDRESS);
 
-char keymap[19] = "D#0*C987B654A321NF";  // N = NoKey, F = Fail
-
+char keymap[19] = "D#0*C987B654A321NF";
 String inputNumber = "";
 bool inputMode = false;
 
-
-
 long currentFrequency = 27000000;
 bool change = false;
-int segment = 0; // Variable para el número de segmentos
+int segment = 0;
 String oldFrequency_string;
-unsigned long lastAudioUpdate = 0; // Última actualización de la barra de audio
-unsigned long audioUpdateInterval = 50; // Intervalo de actualización en milisegundos (10 veces por segundo)
+unsigned long lastAudioUpdate = 0;
+unsigned long audioUpdateInterval = 50;
 String shz;
 String skhz;
 String smhz;
@@ -62,9 +57,8 @@ void setup() {
   Wire.begin();
   Wire.setClock(400000);
   keyPad.loadKeyMap(keymap);
-  //delay(1000);
-
 }
+
 
 void clock1_ISR() {
   bool dir = digitalRead(PB13);
@@ -87,7 +81,6 @@ void clock1_ISR2() {
   }
   change = true;
 }
-
 void drawScale() {
   tft.drawRect(SCALE_X_OFFSET - 2, AUDIO_BAR_Y_OFFSET - 2, SCALE_WIDTH + 4, SCALE_HEIGHT + 4, ILI9341_WHITE);
   int segmentWidth = SCALE_WIDTH / NUM_SEGMENTS;
@@ -105,23 +98,35 @@ void drawScale() {
 }
 
 void loop() {
-  if (change == true) {
-    clock_update();
-  }
+
 
   unsigned long currentMillis = millis();
   if (currentMillis - lastAudioUpdate >= audioUpdateInterval) {
-    audio_peek(); // Actualiza la barra de medición de audio
+    audio_peek();
     lastAudioUpdate = currentMillis;
+    if (change == true) {
+      clock_update();
+    }
   }
 
-  if (keyPad.isPressed())
-  {
-    numericInput();
+  if (keyPad.isPressed()) {
+
+    keypadInput() ;
+    updateInputNumberDisplay();
     delay(200);
+    if (!inputMode) {
+      tft.fillRect(20, 5, 270, 25, ILI9341_BLACK);//<<<<<<<<<<<<<<<<<<< aqui se borra el input number despues del enter
+      inputNumber = "";
+    }
   }
 }
 
+void updateInputNumberDisplay() {
+  tft.setCursor(30, 10);
+  tft.setTextSize(2);
+  tft.setTextColor(ILI9341_GREEN);
+  tft.print(inputNumber);
+}
 void clock_update() {
   f_string();
 
@@ -138,28 +143,37 @@ void clock_update() {
   change = false;
 }
 
+
 void audio_peek() {
   int audioValue = analogRead(AUDIO_IN);
+
+  // Calcular el nuevo segmento
   int newSegment = audioValue / (4095 / NUM_SEGMENTS);
 
+  // Limitar el nuevo segmento para que no sea mayor que NUM_SEGMENTS - 1
+  if (newSegment >= NUM_SEGMENTS) {
+    newSegment = NUM_SEGMENTS - 1;
+  }
+
   if (newSegment != segment) {
-    tft.fillRect(SCALE_X_OFFSET, AUDIO_BAR_Y_OFFSET, SCALE_WIDTH, SCALE_HEIGHT, ILI9341_BLACK);
+    tft.fillRoundRect(SCALE_X_OFFSET, AUDIO_BAR_Y_OFFSET, SCALE_WIDTH, SCALE_HEIGHT, 2, ILI9341_BLACK);
 
     int segmentWidth = SCALE_WIDTH / NUM_SEGMENTS;
     segment = newSegment;
 
     for (int i = 0; i <= segment; i++) {
       int x = SCALE_X_OFFSET + i * segmentWidth;
-      if (i >= NUM_SEGMENTS - 2) {
-        tft.fillRect(x, AUDIO_BAR_Y_OFFSET, segmentWidth, SCALE_HEIGHT, ILI9341_RED);
+      if (i >= NUM_SEGMENTS - 1) {
+        tft.fillRoundRect(x, AUDIO_BAR_Y_OFFSET, segmentWidth, SCALE_HEIGHT, 2, ILI9341_RED);
       } else if (i == 6 || i == 7) {
-        tft.fillRect(x, AUDIO_BAR_Y_OFFSET, segmentWidth, SCALE_HEIGHT, ILI9341_YELLOW);
+        tft.fillRoundRect(x, AUDIO_BAR_Y_OFFSET, segmentWidth, SCALE_HEIGHT, 2, ILI9341_YELLOW);
       } else {
-        tft.fillRect(x, AUDIO_BAR_Y_OFFSET, segmentWidth, SCALE_HEIGHT, ILI9341_GREEN);
+        tft.fillRoundRect(x, AUDIO_BAR_Y_OFFSET, segmentWidth, SCALE_HEIGHT, 2, ILI9341_GREEN);
       }
     }
   }
 }
+
 
 void f_string() {
 
@@ -182,7 +196,7 @@ void f_string() {
     shz = ",00" + String(hz);
   }
   if (hz == 0) {
-    shz = ",000//";
+    shz = ",000";
   }
   //#################### KHZ
 
@@ -202,7 +216,7 @@ void f_string() {
   frequency_string = smhz + skhz + shz;
 }
 
-void numericInput() {
+void keypadInput()  {
   int oldClock = currentFrequency;
   char ch = keyPad.getChar();
   int key = keyPad.getLastKey();
@@ -219,24 +233,30 @@ void numericInput() {
     }
     if (modeNumber >= 3) {
       modeNumber = 0;
+      mode = "LSB"; // Asigna "LSB" cuando modeNumber vuelve a 0
     }
     get_mode();
   }
 
+
   if (ch == 'A') {
+
     if (!inputMode) {
       inputMode = true;
       inputNumber = "";
-
     } else {
       int number = inputNumber.toInt();
       inputMode = false;
+
       change = true;
       if (number > 1000000 && number < 50000000) {
         currentFrequency = number;
+
+
       }
       else if (number < 1000000 || number > 50000000) {
         currentFrequency = oldClock;
+
       }
     }
   } else if (inputMode) {
@@ -246,9 +266,16 @@ void numericInput() {
   }
   if (inputMode) {
     tft.fillRect(270, 25, 60, 30, ILI9341_GREEN);
+    tft.setCursor(150, 12);
+    tft.setTextSize(1.5);
+    tft.setTextColor(ILI9341_GREEN);
+    tft.print("Introduzca frecuancia");
+
+
   }
   if (!inputMode) {
     tft.fillRect(270, 25, 60, 30, ILI9341_BLACK);
+
   }
 
 
@@ -256,9 +283,11 @@ void numericInput() {
 
 
 void get_mode() {
-  tft.fillRect(235, 65, 80, 40, ILI9341_ORANGE);
-  tft.setCursor(240, 70);
+  tft.fillRoundRect(235, 65, 80, 40, 2, ILI9341_ORANGE);
+  tft.setCursor(240, 72);
   tft.setTextSize(4);
   tft.setTextColor(ILI9341_BLACK);
   tft.print(mode);
 }
+
+
