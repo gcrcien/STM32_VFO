@@ -269,7 +269,7 @@ void keypadInput()  {
     tft.setCursor(150, 12);
     tft.setTextSize(1.5);
     tft.setTextColor(ILI9341_GREEN);
-    tft.print("Introduzca frecuancia");
+    tft.print("Introduzca frecuencia");
 
 
   }
