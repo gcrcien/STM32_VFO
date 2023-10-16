@@ -36,7 +36,7 @@ String shz;
 String skhz;
 String smhz;
 String frequency_string;
-String mode;
+String mode = "LSB";
 int modeNumber = 0;
 
 void setup() {
@@ -289,5 +289,4 @@ void get_mode() {
   tft.setTextColor(ILI9341_BLACK);
   tft.print(mode);
 }
-
 
