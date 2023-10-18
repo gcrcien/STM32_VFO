@@ -1,7 +1,10 @@
+
 #include "SPI.h"
 #include "Adafruit_GFX.h"
 #include "Adafruit_ILI9341.h"
-
+#include <Wire.h>
+#include <si5351.h>
+Si5351 si5351;
 #define TFT_CS    PA4
 #define TFT_CLK   PA5
 #define TFT_MISO  PA6
@@ -18,7 +21,7 @@
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
 
-long currentFrequency = 27000000;
+unsigned long currentFrequency = 13990000;
 bool change = false;
 int segment = 0; // Variable para el número de segmentos
 String oldFrequency_string;
@@ -40,6 +43,14 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(PB12), clock1_ISR, FALLING);
   attachInterrupt(digitalPinToInterrupt(PB13), clock1_ISR2, FALLING);
   SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
+  ////////////////////////Setting up I2C Comms //////////////////////////
+  Wire.begin();
+  Wire.setClock(400000);
+
+  //////////////////////////////////////////////////////////////////////
+  si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
+  si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_8MA);
+  si5351.output_enable(SI5351_CLK0, 1);
 
   drawScale();
 }
@@ -96,6 +107,7 @@ void loop() {
 
 void clock_update() {
   f_string();
+  si5351.set_freq((currentFrequency  ) * SI5351_FREQ_MULT, SI5351_CLK0);
 
   // tft.fillRect(1, 30, 290, 28, ILI9341_BLACK);
   tft.setCursor(20, 30);
@@ -154,7 +166,7 @@ void f_string() {
     shz = ",00" + String(hz);
   }
   if (hz == 0) {
-    shz = ",000//";
+    shz = ",000";
   }
   //#################### KHZ
 
