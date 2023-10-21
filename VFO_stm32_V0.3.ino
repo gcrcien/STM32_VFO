@@ -66,6 +66,8 @@ String shz;
 String skhz;
 String smhz;
 String frequency_string;
+//tx state value
+bool txState;
 
 // Modo de operación (LSB, AM, USB)
 String mode = "LSB";
@@ -88,6 +90,9 @@ int spectrumData[SPECTRUM_WIDTH];
 // Valor de entrada de audio
 int audioValue;
 
+//PTT
+bool ptt = 0;
+
 // Bandera para la exploración de frecuencias
 bool scan = false;
 
@@ -102,6 +107,7 @@ void setup() {
   // Configuración de pines y habilitación de interrupciones para el control de frecuencia
   pinMode(PB12, INPUT_PULLUP);
   pinMode(PB13, INPUT_PULLUP);
+  pinMode(PA10, INPUT);
   attachInterrupt(digitalPinToInterrupt(PB12), clock1_ISR, FALLING);
   attachInterrupt(digitalPinToInterrupt(PB13), clock1_ISR2, FALLING);
 
@@ -125,6 +131,22 @@ void setup() {
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
   si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_4MA);
   si5351.output_enable(SI5351_CLK0, 1);
+
+  //BORRAR DESPUES
+  ptt = digitalRead(PA10);
+  tft.fillRoundRect(235, 110, 80, 40, 2, ILI9341_GREEN);
+  tft.setCursor(250, 115);
+  tft.setTextSize(4);
+  tft.setTextColor(ILI9341_BLACK);
+  tft.print("RX");
+  ptt = digitalRead(PA10);
+  if (ptt) {
+    tft.setCursor(250, 115);
+    tft.setTextSize(4);
+    tft.setTextColor(ILI9341_BLACK);
+    tft.print("TX");
+  }
+
 }
 
 // Manejador de interrupción para el control de frecuencia (giro de perilla)
@@ -342,6 +364,24 @@ void drawSpectrum() {
 }
 
 void loop() {
+
+  if (ptt && !txState) {
+    txState = true;
+    tft.fillRoundRect(235, 110, 80, 40, 2, ILI9341_RED);
+    tft.setCursor(250, 115);
+    tft.setTextSize(4);
+    tft.setTextColor(ILI9341_BLACK);
+    tft.print("TX");
+  }
+
+  if (!ptt && txState) {
+    txState = false;
+    tft.fillRoundRect(235, 110, 80, 40, 2, ILI9341_GREEN);
+    tft.setCursor(250, 115);
+    tft.setTextSize(4);
+    tft.setTextColor(ILI9341_BLACK);
+    tft.print("RX");
+  }
   // Exploración de frecuencias
   if (scan) {
     if (change) {
@@ -365,6 +405,7 @@ void loop() {
   // Actualización de audio y frecuencia
   unsigned long currentMillis = millis();
   if (currentMillis - lastAudioUpdate >= audioUpdateInterval) {
+    ptt = digitalRead(PA10);
     audio_peek();
     lastAudioUpdate = currentMillis;
     if (change == true) {
@@ -383,4 +424,5 @@ void loop() {
       inputNumber = "";
     }
   }
+
 }
