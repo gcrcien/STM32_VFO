@@ -49,7 +49,7 @@ bool inputMode = false;
 bool change = false;
 
 // Offset de frecuencia para mi radio/mezclador
-long int IFoffset = 10696000; 
+long int IFoffset = 10696000;
 
 // Segmento actual en la barra de audio
 int segment = 0;
@@ -297,10 +297,10 @@ void keypadInput() {
       inputMode = false;
 
       change = true;
-      if (number > 1000000 && number < 50000000) {
-        currentFrequency = number;
+      if (number > 1000 && number < 50000) {
+        currentFrequency = (number * 1000);
       }
-      else if (number < 1000000 || number > 50000000) {
+      else if (number < 1000 || number > 50000) {
         currentFrequency = oldClock;
       }
     }
@@ -344,13 +344,16 @@ void drawSpectrum() {
 void loop() {
   // Exploración de frecuencias
   if (scan) {
+    if (change) {
+      scan = !scan;
+    }
     if (currentFrequency <= maxFrequency) {
       currentFrequency += frequencyStep;
       si5351.set_freq((currentFrequency - IFoffset ) * SI5351_FREQ_MULT, SI5351_CLK0);
       clock_update();
       audio_peek();
       delay(20);
-      if (audioValue > 60) {
+      if (audioValue > 90) {
         scan = !scan;
       }
     }
