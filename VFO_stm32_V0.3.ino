@@ -21,7 +21,7 @@
 #define NUM_SEGMENTS 9
 
 // Frecuencia actual
-unsigned long currentFrequency = 27455000;
+unsigned long currentFrequency = 27185000;
 
 // Inicialización del objeto TFT
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
@@ -49,7 +49,9 @@ bool inputMode = false;
 bool change = false;
 
 // Offset de frecuencia para mi radio/mezclador
-long int IFoffset = 10696000;
+long int IFoffset = 10694700;
+int ssbofset = 2500;
+int comp = 100;
 
 // Segmento actual en la barra de audio
 int segment = 0;
@@ -71,21 +73,11 @@ bool txState;
 
 // Modo de operación (LSB, AM, USB)
 String mode = "LSB";
-int modeNumber = 0;
-
-// Definición de la barra de espectro
-#define SPECTRUM_X_OFFSET 20
-#define SPECTRUM_Y_OFFSET 150
-#define SPECTRUM_WIDTH 280
-#define SPECTRUM_HEIGHT 60
-#define SPECTRUM_MIN_FREQ 26000000UL
-#define SPECTRUM_MAX_FREQ 28500000UL
+bool sideband;
+bool previousSide;
 
 // Segmento actual en el espectro
 int newSegment;
-
-// Arreglo para almacenar los niveles de señal del espectro
-int spectrumData[SPECTRUM_WIDTH];
 
 // Valor de entrada de audio
 int audioValue;
@@ -108,6 +100,7 @@ void setup() {
   pinMode(PB12, INPUT_PULLUP);
   pinMode(PB13, INPUT_PULLUP);
   pinMode(PA10, INPUT);
+  pinMode(PA9, INPUT);
   attachInterrupt(digitalPinToInterrupt(PB12), clock1_ISR, FALLING);
   attachInterrupt(digitalPinToInterrupt(PB13), clock1_ISR2, FALLING);
 
@@ -289,23 +282,6 @@ void keypadInput() {
   int oldClock = currentFrequency;
   char ch = keyPad.getChar();
   int key = keyPad.getLastKey();
-  if (ch == 'B') {
-    modeNumber++;
-    if (modeNumber == 0) {
-      mode = "LSB";
-    }
-    if (modeNumber == 1) {
-      mode = "AM";
-    }
-    if (modeNumber == 2) {
-      mode = "USB";
-    }
-    if (modeNumber >= 3) {
-      modeNumber = 0;
-      mode = "LSB"; // Asigna "LSB" cuando modeNumber vuelve a 0
-    }
-    get_mode();
-  }
   if (ch == '*') {
     scan = !scan;
   }
@@ -352,16 +328,6 @@ void get_mode() {
   tft.print(mode);
 }
 
-// Dibuja el espectro en el TFT
-void drawSpectrum() {
-  tft.fillRoundRect(70, 150, 80, 40, 2, ILI9341_BLACK);
-
-  for (int x = 0; x < SPECTRUM_WIDTH; x++) {
-    int freq = map(x, 0, SPECTRUM_WIDTH, SPECTRUM_MIN_FREQ, SPECTRUM_MAX_FREQ);
-    int level = map(spectrumData[x], 0, 1023, SPECTRUM_Y_OFFSET + SPECTRUM_HEIGHT, SPECTRUM_Y_OFFSET);
-    tft.drawFastVLine(SPECTRUM_X_OFFSET + x, level, SPECTRUM_Y_OFFSET + SPECTRUM_HEIGHT - level, ILI9341_RED);
-  }
-}
 
 void loop() {
 
@@ -372,6 +338,7 @@ void loop() {
     tft.setTextSize(4);
     tft.setTextColor(ILI9341_BLACK);
     tft.print("TX");
+    //si5351.set_freq((currentFrequency - IFoffset + 2500) * SI5351_FREQ_MULT, SI5351_CLK0);
   }
 
   if (!ptt && txState) {
@@ -389,7 +356,7 @@ void loop() {
     }
     if (currentFrequency <= maxFrequency) {
       currentFrequency += frequencyStep;
-      si5351.set_freq((currentFrequency - IFoffset ) * SI5351_FREQ_MULT, SI5351_CLK0);
+      si5351.set_freq((currentFrequency - IFoffset + comp) * SI5351_FREQ_MULT, SI5351_CLK0);
       clock_update();
       audio_peek();
       delay(20);
@@ -406,11 +373,27 @@ void loop() {
   unsigned long currentMillis = millis();
   if (currentMillis - lastAudioUpdate >= audioUpdateInterval) {
     ptt = digitalRead(PA10);
+    sideband = digitalRead(PA9);
+    if (!sideband) {
+      mode = "USB";
+      IFoffset = 10697200 - ssbofset;  // Procesamiento del teclado
+    }
+
+    if (sideband) {
+      mode = "LSB";
+      IFoffset = 10697200 + ssbofset;       // Procesamiento del teclado
+    }
+    if (previousSide != sideband) {
+      si5351.set_freq((currentFrequency - IFoffset + comp) * SI5351_FREQ_MULT, SI5351_CLK0);
+      previousSide = sideband;
+      get_mode();
+
+    }
     audio_peek();
     lastAudioUpdate = currentMillis;
-    if (change == true) {
+    if (change) {
       clock_update();
-      si5351.set_freq((currentFrequency - IFoffset ) * SI5351_FREQ_MULT, SI5351_CLK0);
+      si5351.set_freq((currentFrequency - IFoffset + comp) * SI5351_FREQ_MULT, SI5351_CLK0);
     }
   }
 
