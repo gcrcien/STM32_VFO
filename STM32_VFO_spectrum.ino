@@ -36,7 +36,7 @@ const double samplingFrequency = 100000;
 unsigned long microseconds;
 int micro1;
 unsigned int micro2;
-int fft_offset = 29000;
+int FFToffset = 29000;
 double vReal[samples];
 double vImag[samples];
 
@@ -179,9 +179,9 @@ void setup() {
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
   si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_8MA);
   si5351.output_enable(SI5351_CLK0, 1);
-  si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA);
-  si5351.output_enable(SI5351_CLK1, 1);
-  //si5351.set_freq((675000) * SI5351_FREQ_MULT, SI5351_CLK1);
+  si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA);
+  si5351.output_enable(SI5351_CLK2, 1);
+  si5351.set_freq((27175000) * SI5351_FREQ_MULT, SI5351_CLK2);
 
   //BORRAR DESPUES
   ptt = digitalRead(PA10);
@@ -364,10 +364,10 @@ void keypadInput() {
       inputMode = false;
 
       change = true;
-      if (number > 1000 && number < 50000) {
+      if (number > 21000 && number < 50000) {
         currentFrequency = (number * 1000);
       }
-      else if (number < 1000 || number > 50000) {
+      else if (number < 21000 || number > 50000) {
         currentFrequency = oldClock;
       }
     }
@@ -407,6 +407,7 @@ void loop() {
     tft.setTextSize(4);
     tft.setTextColor(ILI9341_BLACK);
     tft.print("TX");
+    //si5351.set_freq((currentFrequency - IFoffset + 2500) * SI5351_FREQ_MULT, SI5351_CLK0);
   }
 
   if (!ptt && txState) {
@@ -425,8 +426,7 @@ void loop() {
     if (currentFrequency <= maxFrequency) {
       currentFrequency += frequencyStep;
       si5351.set_freq((currentFrequency - IFoffset + comp) * SI5351_FREQ_MULT, SI5351_CLK0);
-      si5351.set_freq((currentFrequency  + comp - fft_offset) * SI5351_FREQ_MULT, SI5351_CLK1);
-
+      si5351.set_freq((currentFrequency - FFToffset + comp) * SI5351_FREQ_MULT, SI5351_CLK2);
       clock_update();
       audio_peek();
       delay(20);
@@ -444,7 +444,7 @@ void loop() {
   if (currentMillis - lastAudioUpdate >= audioUpdateInterval) {
     ptt = digitalRead(PA10);
     sideband = digitalRead(PA9);
-    audio_peek();
+
     // Llamada a la función performFFT para realizar la FFT y obtener los datos
     //performFFT();
     // Llamada a la función drawFFTGraph para dibujar la gráfica de la FFT
@@ -462,17 +462,17 @@ void loop() {
     }
     if (previousSide != sideband) {
       si5351.set_freq((currentFrequency - IFoffset + comp) * SI5351_FREQ_MULT, SI5351_CLK0);
-      si5351.set_freq((currentFrequency  + comp - fft_offset) * SI5351_FREQ_MULT, SI5351_CLK1);
-
+      si5351.set_freq((currentFrequency - FFToffset + comp) * SI5351_FREQ_MULT, SI5351_CLK2);
       previousSide = sideband;
       get_mode();
 
     }
+    audio_peek();
     lastAudioUpdate = currentMillis;
     if (change) {
       clock_update();
       si5351.set_freq((currentFrequency - IFoffset + comp) * SI5351_FREQ_MULT, SI5351_CLK0);
-      si5351.set_freq((currentFrequency  + comp - fft_offset) * SI5351_FREQ_MULT, SI5351_CLK1);
+      si5351.set_freq((currentFrequency - FFToffset + comp) * SI5351_FREQ_MULT, SI5351_CLK2);
 
     }
   }
@@ -481,7 +481,7 @@ void loop() {
   if (keyPad.isPressed()) {
     keypadInput();
     updateInputNumberDisplay();
-    delay(20);
+    delay(200);
     if (!inputMode) {
       tft.fillRect(20, 5, 270, 25, ILI9341_BLACK);
       inputNumber = "";
@@ -502,17 +502,13 @@ void performFFTAndDrawGraph(int xOffset, int yOffset) {
   }
 
   FFT = arduinoFFT(vReal, vImag, samples, samplingFrequency);
-  FFT.Windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);    /// Hamminf se ve bien
+  FFT.Windowing(FFT_WIN_TYP_RECTANGLE, FFT_FORWARD);
   FFT.Compute(FFT_FORWARD);
   FFT.ComplexToMagnitude();
 
   // Eliminar las 3 primeras magnitudes
-  vReal[0] = 100;
-  vReal[1] = 100;
-  //vReal[2] = 100;
-  //vReal[3] = 100;
-  //vReal[4] = 100;
-
+  vReal[0] = 0;
+  vReal[1] = 0;
   unsigned int fft_time = micros() - micro2;
 
   // Configura los márgenes y dimensiones del gráfico
@@ -525,13 +521,20 @@ void performFFTAndDrawGraph(int xOffset, int yOffset) {
   float barWidth = static_cast<float>(graphWidth) / samples;
 
   // Encuentra el valor máximo en los datos de la FFT
-  double maxMagnitude = 0.0;
+  int maxMagnitude = 0.0;
   for (int i = 0; i < samples / 2; i++) {
     if (vReal[i] > maxMagnitude) {
       maxMagnitude = vReal[i];
     }
   }
-
+  if (maxMagnitude < 5000) {
+    maxMagnitude = 5000;
+  }
+  tft.fillRoundRect(39, 140, 50, 10, 2, ILI9341_GREEN);
+  tft.setCursor(40, 141);
+  tft.setTextSize(1);
+  tft.setTextColor(ILI9341_BLACK);
+  tft.print(maxMagnitude);
   // Dibuja las barras de la gráfica con 1 píxel de ancho
   for (int i = 0; i < samples / 2; i++) {
     // Calcula la altura de la barra según el valor de la FFT
