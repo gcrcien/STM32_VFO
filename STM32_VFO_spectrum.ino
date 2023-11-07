@@ -30,7 +30,7 @@ unsigned int sampling_period_us;
 
 arduinoFFT FFT;
 
-#define CHANNEL PA4
+#define CHANNEL PA3
 const uint16_t samples = 512;
 const double samplingFrequency = 100000;
 unsigned long microseconds;
@@ -88,7 +88,7 @@ String oldFrequency_string;
 
 // Intervalo de actualización de audio
 unsigned long lastAudioUpdate = 0;
-unsigned long audioUpdateInterval = 50;
+unsigned long audioUpdateInterval = 1;
 
 // Variables para construir la cadena de frecuencia
 String shz;
@@ -151,18 +151,37 @@ void setup() {
   Wire.setClock(400000);
   keyPad.loadKeyMap(keymap);
 
-  //TFT y sus marcos
+  //FFT y sus marcos
   tft.fillRect(1, 151, 250, 76, ILI9341_BLACK);
   tft.drawRect(0, 150, 252, 77, ILI9341_WHITE);
-  for (int x = 20; x <= 252; x += 20) {
+  for (int x = 25; x <= 252; x += 25) {
     tft.drawFastVLine(x, 225, 8, ILI9341_WHITE);
   }
+
+  // Agregar los números desde -25 kHz hasta +25 kHz
+  for (int i = 0; i <= 50; i += 5) {
+    int i2;
+    tft.setTextColor(ILI9341_WHITE);
+    tft.setTextSize(0);
+    tft.setCursor(2 + (i ) * 5, 230); // Ajusta las coordenadas según tus necesidades
+    if (i < 25) {
+      i2 = (( i - 25) *  - 1);
+    }
+    else {
+      i2 = i - 25;
+    }
+    tft.print(i2);
+  }
+
 
 
   // Inicialización del Si5351
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
   si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_8MA);
   si5351.output_enable(SI5351_CLK0, 1);
+  //si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_8MA);
+  //si5351.output_enable(SI5351_CLK1, 1);
+  //si5351.set_freq((675000) * SI5351_FREQ_MULT, SI5351_CLK1);
 
   //BORRAR DESPUES
   ptt = digitalRead(PA10);
@@ -426,9 +445,11 @@ void loop() {
     sideband = digitalRead(PA9);
 
     // Llamada a la función performFFT para realizar la FFT y obtener los datos
-    performFFT();
+    //performFFT();
     // Llamada a la función drawFFTGraph para dibujar la gráfica de la FFT
-    drawFFTGraph(vReal, samples, tft, 0, 150);
+    //drawFFTGraph(vReal, samples, tft, 0, 150);
+    performFFTAndDrawGraph(1, 150);
+
     if (!sideband) {
       mode = "USB";
       IFoffset = 10697200 - ssbofset;  // Procesamiento del teclado
@@ -465,8 +486,7 @@ void loop() {
 
 }
 
-void performFFT() {
-  micro1 = micros();
+void performFFTAndDrawGraph(int xOffset, int yOffset) {
 
   microseconds = micros();
   for (int i = 0; i < samples; i++) {
@@ -477,29 +497,15 @@ void performFFT() {
     microseconds += sampling_period_us;
   }
 
-  micro2 = micros();
-
   FFT = arduinoFFT(vReal, vImag, samples, samplingFrequency);
-
   FFT.Windowing(FFT_WIN_TYP_RECTANGLE, FFT_FORWARD);
   FFT.Compute(FFT_FORWARD);
   FFT.ComplexToMagnitude();
 
   // Eliminar las 3 primeras magnitudes
-
-
-  double x = FFT.MajorPeak();
-
+  vReal[0] = 0;
+  vReal[1] = 0;
   unsigned int fft_time = micros() - micro2;
-  //delay(50);
-}
-
-void drawFFTGraph(double *vData, uint16_t bufferSize, Adafruit_ILI9341 &tft, int xOffset, int yOffset) {
-  vData[0] = 0;
-  vData[1] = 0;
-  //vData[2]=0;
-  tft.fillRect(1, 151, 250, 75, ILI9341_BLACK);
-
 
   // Configura los márgenes y dimensiones del gráfico
   int graphWidth = TFT_WIDTH;
@@ -508,27 +514,29 @@ void drawFFTGraph(double *vData, uint16_t bufferSize, Adafruit_ILI9341 &tft, int
   int startY = GRAPH_TOP_MARGIN + graphHeight + yOffset;
 
   // Calcula el ancho de cada barra en el gráfico
-  float barWidth = static_cast<float>(graphWidth) / bufferSize;
+  float barWidth = static_cast<float>(graphWidth) / samples;
 
   // Encuentra el valor máximo en los datos de la FFT
   double maxMagnitude = 0.0;
-  for (uint16_t i = 0; i < bufferSize; i++) {
-    if (vData[i] > maxMagnitude) {
-      maxMagnitude = vData[i];
+  for (int i = 0; i < samples / 2; i++) {
+    if (vReal[i] > maxMagnitude) {
+      maxMagnitude = vReal[i];
     }
   }
 
   // Dibuja las barras de la gráfica con 1 píxel de ancho
-  for (uint16_t i = 0; i < bufferSize / 2; i++) {
+  for (int i = 0; i < samples / 2; i++) {
     // Calcula la altura de la barra según el valor de la FFT
-    int barHeight = static_cast<int>((vData[i] / maxMagnitude) * graphHeight);
+    int barHeight = static_cast<int>((vReal[i] / maxMagnitude) * graphHeight);
 
     // Calcula la posición de inicio de la barra
     int x = startX + static_cast<int>(i * barWidth);
     int y1 = startY - barHeight;
 
     // Dibuja la barra como una línea vertical de 1 píxel de ancho
+    tft.drawFastVLine(x, 152, 73, ILI9341_BLACK);
     tft.drawFastVLine(x, y1, barHeight, ILI9341_GREEN);
   }
+
 
 }
