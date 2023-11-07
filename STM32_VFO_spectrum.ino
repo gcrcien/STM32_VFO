@@ -36,7 +36,7 @@ const double samplingFrequency = 100000;
 unsigned long microseconds;
 int micro1;
 unsigned int micro2;
-
+int fft_offset = 29000;
 double vReal[samples];
 double vImag[samples];
 
@@ -179,8 +179,8 @@ void setup() {
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
   si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_8MA);
   si5351.output_enable(SI5351_CLK0, 1);
-  //si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_8MA);
-  //si5351.output_enable(SI5351_CLK1, 1);
+  si5351.drive_strength(SI5351_CLK1, SI5351_DRIVE_2MA);
+  si5351.output_enable(SI5351_CLK1, 1);
   //si5351.set_freq((675000) * SI5351_FREQ_MULT, SI5351_CLK1);
 
   //BORRAR DESPUES
@@ -407,7 +407,6 @@ void loop() {
     tft.setTextSize(4);
     tft.setTextColor(ILI9341_BLACK);
     tft.print("TX");
-    //si5351.set_freq((currentFrequency - IFoffset + 2500) * SI5351_FREQ_MULT, SI5351_CLK0);
   }
 
   if (!ptt && txState) {
@@ -426,6 +425,8 @@ void loop() {
     if (currentFrequency <= maxFrequency) {
       currentFrequency += frequencyStep;
       si5351.set_freq((currentFrequency - IFoffset + comp) * SI5351_FREQ_MULT, SI5351_CLK0);
+      si5351.set_freq((currentFrequency  + comp - fft_offset) * SI5351_FREQ_MULT, SI5351_CLK1);
+
       clock_update();
       audio_peek();
       delay(20);
@@ -443,7 +444,7 @@ void loop() {
   if (currentMillis - lastAudioUpdate >= audioUpdateInterval) {
     ptt = digitalRead(PA10);
     sideband = digitalRead(PA9);
-
+    audio_peek();
     // Llamada a la función performFFT para realizar la FFT y obtener los datos
     //performFFT();
     // Llamada a la función drawFFTGraph para dibujar la gráfica de la FFT
@@ -461,15 +462,18 @@ void loop() {
     }
     if (previousSide != sideband) {
       si5351.set_freq((currentFrequency - IFoffset + comp) * SI5351_FREQ_MULT, SI5351_CLK0);
+      si5351.set_freq((currentFrequency  + comp - fft_offset) * SI5351_FREQ_MULT, SI5351_CLK1);
+
       previousSide = sideband;
       get_mode();
 
     }
-    audio_peek();
     lastAudioUpdate = currentMillis;
     if (change) {
       clock_update();
       si5351.set_freq((currentFrequency - IFoffset + comp) * SI5351_FREQ_MULT, SI5351_CLK0);
+      si5351.set_freq((currentFrequency  + comp - fft_offset) * SI5351_FREQ_MULT, SI5351_CLK1);
+
     }
   }
 
@@ -477,7 +481,7 @@ void loop() {
   if (keyPad.isPressed()) {
     keypadInput();
     updateInputNumberDisplay();
-    delay(200);
+    delay(20);
     if (!inputMode) {
       tft.fillRect(20, 5, 270, 25, ILI9341_BLACK);
       inputNumber = "";
@@ -498,13 +502,17 @@ void performFFTAndDrawGraph(int xOffset, int yOffset) {
   }
 
   FFT = arduinoFFT(vReal, vImag, samples, samplingFrequency);
-  FFT.Windowing(FFT_WIN_TYP_RECTANGLE, FFT_FORWARD);
+  FFT.Windowing(FFT_WIN_TYP_HAMMING, FFT_FORWARD);    /// Hamminf se ve bien
   FFT.Compute(FFT_FORWARD);
   FFT.ComplexToMagnitude();
 
   // Eliminar las 3 primeras magnitudes
-  vReal[0] = 0;
-  vReal[1] = 0;
+  vReal[0] = 100;
+  vReal[1] = 100;
+  //vReal[2] = 100;
+  //vReal[3] = 100;
+  //vReal[4] = 100;
+
   unsigned int fft_time = micros() - micro2;
 
   // Configura los márgenes y dimensiones del gráfico
