@@ -31,7 +31,7 @@ unsigned int sampling_period_us;
 arduinoFFT FFT;
 
 #define CHANNEL PA3
-const uint16_t samples = 512;
+const uint16_t samples = 256;
 const double samplingFrequency = 100000;
 unsigned long microseconds;
 int micro1;
