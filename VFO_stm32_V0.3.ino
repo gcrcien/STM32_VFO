@@ -20,8 +20,35 @@
 #define SCALE_HEIGHT 20
 #define NUM_SEGMENTS 9
 
+//Definiciones de la FFT
+#define TFT_WIDTH 500
+#define TFT_HEIGHT 80
+#define GRAPH_TOP_MARGIN 4
+#define GRAPH_BOTTOM_MARGIN 4
+unsigned int sampling_period_us;
+#include "arduinoFFT.h"
+
+arduinoFFT FFT;
+
+#define CHANNEL PA3
+const uint16_t samples = 256;
+const double samplingFrequency = 100000;
+unsigned long microseconds;
+int micro1;
+unsigned int micro2;
+int FFToffset = 29000;
+double vReal[samples];
+double vImag[samples];
+
+#define SCL_INDEX 0x00
+#define SCL_TIME 0x01
+#define SCL_FREQUENCY 0x02
+#define SCL_PLOT 0x03
+
+
+
 // Frecuencia actual
-unsigned long currentFrequency = 27185000;
+unsigned long currentFrequency = 27455000;
 
 // Inicialización del objeto TFT
 Adafruit_ILI9341 tft = Adafruit_ILI9341(TFT_CS, TFT_DC, TFT_RST);
@@ -35,8 +62,9 @@ Si5351 si5351;
 
 // Rangos de frecuencia
 unsigned long minFrequency = 26000000;     // Frecuencia mínima de 26 MHz
-unsigned long maxFrequency = 28500000;     // Frecuencia máxima de 28.5 MHz
+unsigned long maxFrequency = 30500000;     // Frecuencia máxima de 28.5 MHz
 unsigned long frequencyStep = 1000;
+unsigned long scanfrequencyStep = 10000;
 
 // Mapeo de teclas del teclado
 char keymap[19] = "D#0*C987B654A321NF";
@@ -47,6 +75,7 @@ bool inputMode = false;
 
 // Bandera para cambios de frecuencia
 bool change = false;
+bool lock = false; //frequency lock
 
 // Offset de frecuencia para mi radio/mezclador
 long int IFoffset = 10694700;
@@ -61,7 +90,7 @@ String oldFrequency_string;
 
 // Intervalo de actualización de audio
 unsigned long lastAudioUpdate = 0;
-unsigned long audioUpdateInterval = 50;
+unsigned long audioUpdateInterval = 35;
 
 // Variables para construir la cadena de frecuencia
 String shz;
@@ -96,6 +125,10 @@ void setup() {
   tft.setTextColor(ILI9341_WHITE);
   tft.setTextSize(1);
 
+  //definicion de la frecuencia de muestreo para la fft
+  sampling_period_us = round(1000000 * (1.0 / samplingFrequency));
+
+
   // Configuración de pines y habilitación de interrupciones para el control de frecuencia
   pinMode(PB12, INPUT_PULLUP);
   pinMode(PB13, INPUT_PULLUP);
@@ -108,7 +141,7 @@ void setup() {
   SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
 
   // Dibujo de la escala en el TFT
-  tft.fillRect(0, 110, 320, 240, ILI9341_BLUE);
+  //tft.fillRect(0, 110, 320, 240, ILI9341_BLUE);
   drawScale();
 
   // Actualización del reloj y el modo
@@ -120,10 +153,14 @@ void setup() {
   Wire.setClock(400000);
   keyPad.loadKeyMap(keymap);
 
+
   // Inicialización del Si5351
   si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
-  si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_4MA);
+  si5351.drive_strength(SI5351_CLK0, SI5351_DRIVE_8MA);
   si5351.output_enable(SI5351_CLK0, 1);
+  si5351.drive_strength(SI5351_CLK2, SI5351_DRIVE_2MA);
+  si5351.output_enable(SI5351_CLK2, 0);
+  //si5351.set_freq((27175000) * SI5351_FREQ_MULT, SI5351_CLK2);
 
   //BORRAR DESPUES
   ptt = digitalRead(PA10);
@@ -133,37 +170,58 @@ void setup() {
   tft.setTextColor(ILI9341_BLACK);
   tft.print("RX");
   ptt = digitalRead(PA10);
+  sideband = digitalRead(PA9);
+  if (!sideband) {
+    mode = "USB";
+    IFoffset = 10697200 - ssbofset;  // Procesamiento del teclado
+  }
+
+  if (sideband) {
+    mode = "LSB";
+    IFoffset = 10697200 + ssbofset;       // Procesamiento del teclado
+  }
+  get_mode();
   if (ptt) {
     tft.setCursor(250, 115);
     tft.setTextSize(4);
     tft.setTextColor(ILI9341_BLACK);
     tft.print("TX");
   }
+  tft.fillRoundRect(235, 20, 80, 40, 2, ILI9341_BLUE);/////////////////////////////////////////////
+  tft.setCursor(250, 165);
+  tft.setCursor(250, 35);
+  tft.setTextSize(3);
+  tft.setTextColor(ILI9341_BLACK);
+  tft.print("VFO");
 
 }
 
 // Manejador de interrupción para el control de frecuencia (giro de perilla)
 void clock1_ISR() {
-  bool dir = digitalRead(PB13);
-  if (dir == true) {
-    currentFrequency += 10;
+  if (!lock) {
+    bool dir = digitalRead(PB13);
+    if (dir == true) {
+      currentFrequency += 10;
+    }
+    if (dir == false) {
+      currentFrequency -= 10;
+    }
+    change = true;
   }
-  if (dir == false) {
-    currentFrequency -= 10;
-  }
-  change = true;
 }
 
 // Manejador de interrupción para el control de frecuencia (giro de perilla)
 void clock1_ISR2() {
-  bool dir = digitalRead(PB12);
-  if (dir == true) {
-    currentFrequency -= 10;
+  if (!lock) {
+    bool dir = digitalRead(PB12);
+    if (dir == true) {
+      currentFrequency -= 10;
+    }
+    if (dir == false) {
+      currentFrequency += 10;
+    }
+    change = true;
   }
-  if (dir == false) {
-    currentFrequency += 10;
-  }
-  change = true;
 }
 
 // Dibuja la escala en el TFT
@@ -195,11 +253,11 @@ void updateInputNumberDisplay() {
 void clock_update() {
   f_string();
   tft.setCursor(20, 30);
-  tft.setTextSize(4);
+  tft.setTextSize(3);
   tft.setTextColor(ILI9341_BLACK);
   tft.print(oldFrequency_string);
   tft.setCursor(20, 30);
-  tft.setTextSize(4);
+  tft.setTextSize(3);
   tft.setTextColor(ILI9341_GREEN);
   tft.print(frequency_string);
   oldFrequency_string = frequency_string;
@@ -285,20 +343,55 @@ void keypadInput() {
   if (ch == '*') {
     scan = !scan;
   }
+  if (ch == 'D') {
+    lock = !lock;
+    if (lock) {
+      tft.fillRoundRect(235, 20, 80, 40, 2, ILI9341_BLUE);/////////////////////////////////////////////
+      tft.setTextSize(2);
+      tft.setCursor(258, 25);
+      tft.setTextColor(ILI9341_BLACK);
+      tft.print("VFO");
+      tft.setCursor(252, 40);
+      tft.setTextColor(ILI9341_BLACK);
+      tft.print("LOCK");
+      delay(10);
+    }
+    else {
+      tft.fillRoundRect(235, 20, 80, 40, 2, ILI9341_BLUE);/////////////////////////////////////////////
+      tft.setCursor(250, 165);
+      tft.setCursor(250, 35);
+      tft.setTextSize(2);
+      tft.setTextColor(ILI9341_BLACK);
+      tft.print("VFO");
+      delay(10);
+    }
+  }
+  if (ch == 'B') {
+    currentFrequency += 10000; // usando teclas para cambiar de canal
+    change = true;
+  }
+
+
+  if (ch == 'C') {
+    currentFrequency -= 10000;// usando teclas para cambiar de canal
+    change = true;
+  }
 
   if (ch == 'A') {
     if (!inputMode) {
       inputMode = true;
       inputNumber = "";
-    } else {
+    }
+    else {
       int number = inputNumber.toInt();
       inputMode = false;
-
+      tft.fillRect(20, 0, 150, 30, ILI9341_BLACK);
       change = true;
-      if (number > 1000 && number < 50000) {
+      delay(200);
+      if (number > 21000 && number < 50000) {
         currentFrequency = (number * 1000);
       }
-      else if (number < 1000 || number > 50000) {
+      else if (number < 21000 || number > 50000) {
         currentFrequency = oldClock;
       }
     }
@@ -308,15 +401,33 @@ void keypadInput() {
     }
   }
   if (inputMode) {
-    tft.fillRect(270, 25, 60, 30, ILI9341_GREEN);
-    tft.setCursor(150, 12);
-    tft.setTextSize(1.5);
-    tft.setTextColor(ILI9341_GREEN);
-    tft.print("Introduzca frecuencia");
+    tft.fillRoundRect(235, 20, 80, 40, 2, ILI9341_BLUE);/////////////////////////////////////////////
+    tft.setCursor(245, 35);
+    tft.setTextSize(2);
+    tft.setTextColor(ILI9341_BLACK);
+    tft.print("INPUT");
+    delay(10);
   }
-  if (!inputMode) {
-    tft.fillRect(270, 25, 60, 30, ILI9341_BLACK);
+  else if (lock) {
+    tft.fillRoundRect(235, 20, 80, 40, 2, ILI9341_BLUE);/////////////////////////////////////////////
+    tft.setTextSize(2);
+    tft.setCursor(258, 25);
+    tft.setTextColor(ILI9341_BLACK);
+    tft.print("VFO");
+    tft.setCursor(252, 40);
+    tft.setTextColor(ILI9341_BLACK);
+    tft.print("LOCK");
+    delay(10);
   }
+  else {
+    tft.fillRoundRect(235, 20, 80, 40, 2, ILI9341_BLUE);/////////////////////////////////////////////
+    tft.setCursor(250, 32);
+    tft.setTextSize(3);
+    tft.setTextColor(ILI9341_BLACK);
+    tft.print("VFO");
+    delay(10);
+  }
+
 }
 
 // Muestra el modo de operación en el TFT
@@ -355,11 +466,20 @@ void loop() {
       scan = !scan;
     }
     if (currentFrequency <= maxFrequency) {
-      currentFrequency += frequencyStep;
-      si5351.set_freq((currentFrequency - IFoffset + comp) * SI5351_FREQ_MULT, SI5351_CLK0);
-      clock_update();
-      audio_peek();
-      delay(20);
+      if (!lock) {
+        currentFrequency += frequencyStep;
+        si5351.set_freq((currentFrequency - IFoffset + comp) * SI5351_FREQ_MULT, SI5351_CLK0);
+        clock_update();
+        audio_peek();
+        delay(20);
+      }
+      if (lock) {
+        currentFrequency += scanfrequencyStep;
+        si5351.set_freq((currentFrequency - IFoffset + comp) * SI5351_FREQ_MULT, SI5351_CLK0);
+        clock_update();
+        audio_peek();
+        delay(200);
+      }
       if (audioValue > 90) {
         scan = !scan;
       }
@@ -374,6 +494,11 @@ void loop() {
   if (currentMillis - lastAudioUpdate >= audioUpdateInterval) {
     ptt = digitalRead(PA10);
     sideband = digitalRead(PA9);
+
+    // Llamada a la función performFFT para realizar la FFT y obtener los datos
+    //performFFT();
+    // Llamada a la función drawFFTGraph para dibujar la gráfica de la FFT
+
     if (!sideband) {
       mode = "USB";
       IFoffset = 10697200 - ssbofset;  // Procesamiento del teclado
@@ -385,6 +510,7 @@ void loop() {
     }
     if (previousSide != sideband) {
       si5351.set_freq((currentFrequency - IFoffset + comp) * SI5351_FREQ_MULT, SI5351_CLK0);
+      //si5351.set_freq((currentFrequency - ssbofset - 25000 + comp) * SI5351_FREQ_MULT, SI5351_CLK2);
       previousSide = sideband;
       get_mode();
 
@@ -394,18 +520,21 @@ void loop() {
     if (change) {
       clock_update();
       si5351.set_freq((currentFrequency - IFoffset + comp) * SI5351_FREQ_MULT, SI5351_CLK0);
+      //si5351.set_freq((currentFrequency - ssbofset - 25000 + comp) * SI5351_FREQ_MULT, SI5351_CLK2);
+
     }
   }
 
   // Procesamiento del teclado
   if (keyPad.isPressed()) {
     keypadInput();
-    updateInputNumberDisplay();
-    delay(200);
+    delay(100);
     if (!inputMode) {
-      tft.fillRect(20, 5, 270, 25, ILI9341_BLACK);
+      //tft.fillRect(20, 5, 270, 25, ILI9341_BLACK);
       inputNumber = "";
     }
+    updateInputNumberDisplay();
+
   }
 
 }
