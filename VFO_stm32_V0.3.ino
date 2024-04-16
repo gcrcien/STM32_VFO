@@ -64,7 +64,7 @@ Si5351 si5351;
 unsigned long minFrequency = 26000000;     // Frecuencia mínima de 26 MHz
 unsigned long maxFrequency = 30500000;     // Frecuencia máxima de 28.5 MHz
 unsigned long frequencyStep = 1000;
-unsigned long scanfrequencyStep = 10000;
+unsigned long scanfrequencyStep = 5000;
 
 // Mapeo de teclas del teclado
 char keymap[19] = "D#0*C987B654A321NF";
@@ -99,7 +99,8 @@ String smhz;
 String frequency_string;
 //tx state value
 bool txState;
-
+//sensibilidad del VFO knob
+bool sens = 0;
 // Modo de operación (LSB, AM, USB)
 String mode = "LSB";
 bool sideband;
@@ -199,14 +200,16 @@ void setup() {
 // Manejador de interrupción para el control de frecuencia (giro de perilla)
 void clock1_ISR() {
   if (!lock) {
-    bool dir = digitalRead(PB13);
-    if (dir == true) {
-      currentFrequency += 10;
+    if (!sens) {                                       //si la sensibilidad esta alta se usa este step, si no seignora y solo se usa una interrupcion en lugar de 2           del encoder
+      bool dir = digitalRead(PB13);
+      if (dir == true) {
+        currentFrequency += 10;
+      }
+      if (dir == false) {
+        currentFrequency -= 10;
+      }
+      change = true;
     }
-    if (dir == false) {
-      currentFrequency -= 10;
-    }
-    change = true;
   }
 }
 
@@ -359,7 +362,7 @@ void keypadInput() {
     else {
       tft.fillRoundRect(235, 20, 80, 40, 2, ILI9341_BLUE);/////////////////////////////////////////////
       tft.setCursor(250, 165);
-      tft.setCursor(250, 35);
+      tft.setCursor(258, 25);
       tft.setTextSize(2);
       tft.setTextColor(ILI9341_BLACK);
       tft.print("VFO");
@@ -367,13 +370,29 @@ void keypadInput() {
     }
   }
   if (ch == 'B') {
-    currentFrequency += 10000; // usando teclas para cambiar de canal
+    currentFrequency += 5000; // usando teclas para cambiar de canal
     change = true;
   }
 
-
+  if (ch == '#') {
+    sens = !sens;
+    if (!sens) {
+      tft.fillRoundRect(235, 155, 80, 40, 2, ILI9341_BLUE);/////////////////////////////////////////////
+      tft.setTextSize(3);
+      tft.setCursor(258, 165);
+      tft.setTextColor(ILI9341_WHITE);
+      tft.print("HS");
+    }
+    else {
+      tft.fillRoundRect(235, 155, 80, 40, 2, ILI9341_BLUE);/////////////////////////////////////////////
+      tft.setTextSize(3);
+      tft.setCursor(258, 165);
+      tft.setTextColor(ILI9341_WHITE);
+      tft.print("LS");
+    }
+  }
   if (ch == 'C') {
-    currentFrequency -= 10000;// usando teclas para cambiar de canal
+    currentFrequency -= 5000;// usando teclas para cambiar de canal
     change = true;
   }
 
@@ -395,9 +414,76 @@ void keypadInput() {
         currentFrequency = oldClock;
       }
     }
-  } else if (inputMode) {
+  }
+  if (ch == '0') {
+    if (!inputMode) {
+      currentFrequency = 27455000;// usando teclas para cambiar de canal
+      change = true;
+      //tft.fillRoundRect(235, 170, 80, 40, 2, ILI9341_GREEN);/////////////////////////////////////////////
+      //tft.setCursor(245, 175);
+      //tft.setTextSize(2);
+      //tft.setTextColor(ILI9341_BLACK);
+      //tft.print("reset");
+      //delay(10);
+    }
+  }
+  if (ch == '1') {
+    if (!inputMode) {
+      currentFrequency = 27555000;// usando teclas para cambiar de canal
+      change = true;
+    }
+  }    if (ch == '2') {
+    if (!inputMode) {
+      currentFrequency = 27655000;// usando teclas para cambiar de canal
+      change = true;
+    }
+  }
+  if (ch == '3') {
+    if (!inputMode) {
+      currentFrequency = 27695000;// usando teclas para cambiar de canal
+      change = true;
+    }
+  }
+  if (ch == '4') {
+    if (!inputMode) {
+      currentFrequency = 27815000;// usando teclas para cambiar de canal
+      change = true;
+    }
+  }
+  if (ch == '5') {
+    if (!inputMode) {
+      currentFrequency = 27385000;// usando teclas para cambiar de canal
+      change = true;
+    }
+  }
+  if (ch == '6') {
+    if (!inputMode) {
+      currentFrequency = 27455000;// usando teclas para cambiar de canal
+      change = true;
+    }
+  }
+  if (ch == '7') {
+    if (!inputMode) {
+      currentFrequency = 27455000;// usando teclas para cambiar de canal
+      change = true;
+    }
+  }
+  if (ch == '8') {
+    if (!inputMode) {
+      currentFrequency = 27455000;// usando teclas para cambiar de canal
+      change = true;
+    }
+  }
+  if (ch == '9') {
+    if (!inputMode) {
+      currentFrequency = 27455000;// usando teclas para cambiar de canal
+      change = true;
+    }
+  }
+  else if (inputMode) {
     if (isdigit(ch)) {
       inputNumber += ch;
+      delay(200);
     }
   }
   if (inputMode) {
