@@ -24,8 +24,9 @@ Its not ideal, the signal is kept into acceptable levels cause i connected the d
 so the signals of interest basically disapear out of the fft view if they are a bit high. Need to fix this, a posible way to do it is basically make a 
 mini receiver, so a receiver within a receiver.
 
-Lattest update i have been working on a PCB for the whole project, it handles most fo the VFO part of the system and also includes a Tayloe detector for a realtime sprectrum graph, still needs to be tested, uploaded the Gerber files, PDF and a sch from altium  
-![image](https://github.com/gcrcien/STM32_VFO/assets/126195505/7cf1d298-e997-4121-a0d0-cd41362a0c44)
+Lattest update i have been working on a PCB for the whole project, it handles most fo the VFO part of the system and also includes a Tayloe detector for a realtime sprectrum graph, still needs to be tested, uploaded the Gerber files, PDF and a sch from altium, it also has an IQ output via the 3.5mm jack to connect to sdr++ and act as a SDR via the sound card.
+![image](https://github.com/gcrcien/STM32_VFO/assets/126195505/5107c794-6de5-4f93-970a-8c545f4693ce)
+
 
 This is a work in progress feel free to give me any advice and/or ask any questions
 
