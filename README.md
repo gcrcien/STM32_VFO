@@ -29,7 +29,7 @@ Lattest update i have been working on a PCB for the whole project, it handles mo
 
 Latest version includes a small waterfall display of the sampled audio 
 
-[![Watch the video](https://i.sstatic.net/Vp2cE.png)](https://youtu.be/gbz6IhAs6Uw)
+[![Watch the video](https://img.youtube.com/vi/gbz6IhAs6Uw/0.jpg)](https://youtu.be/gbz6IhAs6Uw)
 
 More work ahead
 
