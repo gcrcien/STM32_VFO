@@ -27,6 +27,13 @@ mini receiver, so a receiver within a receiver.
 Lattest update i have been working on a PCB for the whole project, it handles most fo the VFO part of the system and also includes a Tayloe detector for a realtime sprectrum graph, still needs to be tested, uploaded the Gerber files, PDF and a sch from altium, it also has an IQ output via the 3.5mm jack to connect to sdr++ and act as a SDR via the sound card.
 ![image](https://github.com/gcrcien/STM32_VFO/assets/126195505/5107c794-6de5-4f93-970a-8c545f4693ce)
 
+Latest version includes a small waterfall display of the sampled audio 
+
+[![Watch the video](https://i.sstatic.net/Vp2cE.png)](https://youtu.be/gbz6IhAs6Uw)
+
+More work ahead
+
+![18d13fbe-9281-404b-9812-ee0a2d2707f5](https://github.com/gcrcien/STM32_VFO/assets/126195505/afec86c1-1495-4aa1-930a-9819f65e42c4)
 
 This is a work in progress feel free to give me any advice and/or ask any questions
 
